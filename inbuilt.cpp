@@ -96,10 +96,11 @@ int history(vector<char*>& arguments){
 }
 
 // pinfo command function
+
 int pinfo(vector<char*>& arguments) {
     pid_t pid;
     if (arguments.empty()) {
-        pid = getpid(); // Current shell process ID
+        pid = getpid(); 
     } else {
         pid = atoi(arguments[0]);
         if (pid <= 0) {
@@ -113,13 +114,12 @@ int pinfo(vector<char*>& arguments) {
     string statFilePath = "/proc/" + pidStr + "/stat";
     string exeFilePath = "/proc/" + pidStr + "/exe";
 
-    // Read process status
-    ifstream statusFile(statusFilePath);
-    string line;
     string processStatus;
     string memory;
-    
+
+    ifstream statusFile(statusFilePath);
     if (statusFile.is_open()) {
+        string line;
         while (getline(statusFile, line)) {
             if (line.find("State:") == 0) {
                 istringstream iss(line);
@@ -129,7 +129,7 @@ int pinfo(vector<char*>& arguments) {
                 istringstream iss(line);
                 string label;
                 iss >> label >> memory;
-                memory = memory + " kB";
+                memory += " kB (Virtual Memory)";
             }
         }
         statusFile.close();
@@ -138,23 +138,26 @@ int pinfo(vector<char*>& arguments) {
         return -1;
     }
 
-    // Determine if the process is in the foreground
     ifstream statFile(statFilePath);
     if (statFile.is_open()) {
         string word;
-        for (int i = 1; i <= 7; ++i) {
-            statFile >> word;
-        }
-        if (word != "0") {
-            processStatus += "+";
+        vector<string> statFields;
+        while (statFile >> word) {
+            statFields.push_back(word);
         }
         statFile.close();
+
+        // Check if the process is in the foreground
+        pid_t tty_pgrp = tcgetpgrp(STDIN_FILENO);
+        pid_t process_pgrp = stoi(statFields[4]);
+        if (tty_pgrp == process_pgrp) {
+            processStatus += "+";
+        }
     } else {
         cerr << "Could not open " << statFilePath << endl;
         return -1;
     }
 
-    // Get executable path
     char exePath[PATH_MAX];
     ssize_t len = readlink(exeFilePath.c_str(), exePath, sizeof(exePath) - 1);
     if (len != -1) {
@@ -164,7 +167,6 @@ int pinfo(vector<char*>& arguments) {
         return -1;
     }
 
-    // Print the process information
     cout << "pid -- " << pid << endl;
     cout << "Process Status -- " << processStatus << endl;
     cout << "memory -- " << memory << endl;
