@@ -33,7 +33,8 @@ unordered_map<string, BuiltInCommandFunc> notChild = {
     {"cd", &cd},
     {"pwd", &pwd},
     {"fg",&fg},
-    {"history",&history}
+    {"history",&history},
+    {"pinfo",&pinfo}
 };
 
 
@@ -201,7 +202,7 @@ int echo(vector<char*>& arguments) {
     return 0;
 }
 
-// Helper function to get absolute path
+
 string getAbsolutePath(string& relativePath) {
     char absolutePath[PATH_MAX];
     if (relativePath[0] == '~') relativePath.replace(0, 1, (shellEnv.home_dir + '/').c_str());
@@ -213,31 +214,76 @@ string getAbsolutePath(string& relativePath) {
     }
 }
 
-// Helper function to print file information
-void printFileInformation(const string& dir, string name) {
-    struct stat st;
-    if (stat((dir + "/" + name).c_str(), &st) == 0) {
-        cout << setw(10) << st.st_size << " ";
-        cout << put_time(localtime(&st.st_mtime), "%b %d %H:%M") << " ";
-        cout << setw(5) << st.st_nlink << " ";
-        cout << (S_ISDIR(st.st_mode) ? "d" : "-");
-        cout << (st.st_mode & S_IRUSR ? "r" : "-");
-        cout << (st.st_mode & S_IWUSR ? "w" : "-");
-        cout << (st.st_mode & S_IXUSR ? "x" : "-");
-        cout << (st.st_mode & S_IRGRP ? "r" : "-");
-        cout << (st.st_mode & S_IWGRP ? "w" : "-");
-        cout << (st.st_mode & S_IXGRP ? "x" : "-");
-        cout << (st.st_mode & S_IROTH ? "r" : "-");
-        cout << (st.st_mode & S_IWOTH ? "w" : "-");
-        cout << (st.st_mode & S_IXOTH ? "x" : "-");
-        cout << " ";
-        cout << name << endl;
-    } else {
-        perror("stat");
-    }
+string getFilePermissions(mode_t mode) {
+    string permissions;
+
+    permissions += (S_ISDIR(mode)) ? 'd' : '-';
+    permissions += (mode & S_IRUSR) ? 'r' : '-';
+    permissions += (mode & S_IWUSR) ? 'w' : '-';
+    permissions += (mode & S_IXUSR) ? 'x' : '-';
+    permissions += (mode & S_IRGRP) ? 'r' : '-';
+    permissions += (mode & S_IWGRP) ? 'w' : '-';
+    permissions += (mode & S_IXGRP) ? 'x' : '-';
+    permissions += (mode & S_IROTH) ? 'r' : '-';
+    permissions += (mode & S_IWOTH) ? 'w' : '-';
+    permissions += (mode & S_IXOTH) ? 'x' : '-';
+
+    return permissions;
 }
 
-// Helper function to list directory contents
+// Helper function to print file information in long format
+void printFileInformation(const string& directory, const string& fileName) {
+    struct stat fileStat;
+    string filePath = directory + "/" + fileName;
+
+    if (stat(filePath.c_str(), &fileStat) < 0) {
+        perror("stat");
+        return;
+    }
+
+    string permissions = getFilePermissions(fileStat.st_mode);
+    string owner = getpwuid(fileStat.st_uid)->pw_name;
+    string group = getgrgid(fileStat.st_gid)->gr_name;
+
+    // Get last modified time
+    char timeStr[20];
+    strftime(timeStr, sizeof(timeStr), "%b %d %H:%M", localtime(&fileStat.st_mtime));
+
+    cout << permissions << " "
+         << fileStat.st_nlink << " "
+         << owner << " "
+         << group << " "
+         << setw(8) << fileStat.st_size << " "
+         << timeStr << " "
+         << fileName << endl;
+}
+
+int calculateTotalBlocks(const string& directory, bool showAll) {
+    DIR* dir = opendir(directory.c_str());
+    if (dir == NULL) {
+        perror("opendir");
+        return 0;
+    }
+
+    int totalBlocks = 0;
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (!showAll && entry->d_name[0] == '.') {
+            continue;
+        }
+
+        struct stat fileStat;
+        string filePath = directory + "/" + entry->d_name;
+        if (stat(filePath.c_str(), &fileStat) == 0) {
+            totalBlocks += fileStat.st_blocks;
+        }
+    }
+
+    closedir(dir);
+    return totalBlocks / 2;
+}
+
+// Helper func -- list directory
 void listDirectory(const string& directory, bool showAll, bool longFormat) {
     DIR* dir = opendir(directory.c_str());
     if (dir == NULL) {
@@ -245,9 +291,13 @@ void listDirectory(const string& directory, bool showAll, bool longFormat) {
         return;
     }
 
+    if (longFormat) {
+        int totalBlocks = calculateTotalBlocks(directory, showAll);
+        cout << "total " << totalBlocks << endl;
+    }
+
     struct dirent* entry;
     while ((entry = readdir(dir)) != NULL) {
-        // Skip hidden files if -a is not specified
         if (!showAll && entry->d_name[0] == '.') {
             continue;
         }
@@ -258,11 +308,9 @@ void listDirectory(const string& directory, bool showAll, bool longFormat) {
             cout << entry->d_name << " ";
         }
     }
-
     if (!longFormat) {
         cout << endl;
     }
-
     closedir(dir);
 }
 
@@ -271,7 +319,6 @@ int ls(vector<char*>& arguments) {
     bool showAll = false;
     bool longFormat = false;
 
-    // Parse command-line arguments from vector<char*>
     for (auto arg : arguments) {
         string argument(arg);
         if (argument == "-a") {
@@ -289,25 +336,20 @@ int ls(vector<char*>& arguments) {
         }
     }
 
-    // If no directory is specified, use the current directory
     if (directories.empty()) {
         directories.push_back(".");
     }
 
-    // Process each directory
     for (size_t i = 0; i < directories.size(); ++i) {
         string directory = getAbsolutePath(directories[i]);
         if (directory.empty()) {
-            cerr << "Failed to get absolute path for " << directories[i] << endl;
+            perror(("Directort not found: "+directories[i]).c_str());
             continue;
         }
-
-        // Print directory name if there are multiple directories
         if (directories.size() > 1) {
-            if (i > 0) cout << endl; // Separate listings with a newline
+            if (i > 0) cout << endl; 
             cout << directory << ":" << endl;
         }
-
         listDirectory(directory, showAll, longFormat);
     }
 

@@ -134,5 +134,5 @@ void ShellEnv::getCurrentDirectory(){
 
 
 string ShellEnv::getFormattedPrompt(){
-   return user_name + "@" + system_name + ":" + formatted_dir + "> ";
+   return user_name + "@" + system_name + ":" + formatted_dir + ">";
 }

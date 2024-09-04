@@ -22,8 +22,9 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <signal.h>
-
-#include <readline/readline.h>
+#include <termios.h>
+#include <pwd.h>
+#include <grp.h>
 
 using namespace std;
 
