@@ -60,7 +60,7 @@ Once compiled, you can run the shell with:
   - `echo`: Display text.
   - `pwd`: Print the working directory.
   - `ls`: List files and directories in the current directory.
-  -  Support execution of system commands via `execv`
+  -  Support execution of system commands via `execvp`
 
 - **System Command Management:**
   - Supports running system commands with arguments, handling both background (`&`) and foreground processes.

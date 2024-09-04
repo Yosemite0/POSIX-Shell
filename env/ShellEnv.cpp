@@ -50,12 +50,35 @@ void ShellEnv::writeHistory() {
     fclose(file_stream);
 }
 
+
 void ShellEnv::getHistoryFile() {
-    
-    FILE* file_stream = fopen((shell_dir + history_path).c_str(), "r");
-    if (!file_stream) {
-        perror("Error opening history file for reading");
+    std::string dir_path = shell_dir + "/.history";
+    std::string file_path = dir_path + "/history.txt";
+
+    struct stat info;
+    if (stat(dir_path.c_str(), &info) != 0) {
+        if (mkdir(dir_path.c_str(), 0755) != 0) {
+            perror("Error creating .history directory");
+            return;
+        }
+    } else if (!(info.st_mode & S_IFDIR)) {
+        std::cerr << "Error: " << dir_path << " is not a directory" << std::endl;
         return;
+    }
+
+    FILE* file_stream = fopen(file_path.c_str(), "r");
+    if (!file_stream) {
+        std::ofstream new_file(file_path);
+        if (!new_file) {
+            perror("Error creating history.txt file");
+            return;
+        }
+        new_file.close();
+        file_stream = fopen(file_path.c_str(), "r");
+        if (!file_stream) {
+            perror("Error opening history.txt file for reading after creation");
+            return;
+        }
     }
 
     char* line = nullptr;
@@ -66,7 +89,7 @@ void ShellEnv::getHistoryFile() {
         if (line[read - 1] == '\n') {
             line[read - 1] = '\0';
         }
-        history.push_back(string(line));
+        history.push_back(std::string(line));
     }
 
     free(line);

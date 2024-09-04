@@ -4,4 +4,5 @@
 *.o
 test*
 shell
+2024*
 !.gitignore

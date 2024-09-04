@@ -307,7 +307,7 @@ void listDirectory(const string& directory, bool showAll, bool longFormat) {
         if (longFormat) {
             printFileInformation(directory, entry->d_name);
         } else {
-            cout << entry->d_name << " ";
+            cout << entry->d_name << endl;
         }
     }
     if (!longFormat) {
